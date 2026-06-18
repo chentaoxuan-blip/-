@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>海龟汤 · 情境猜谜</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/ably@2/ably.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08080E;--bg2:#0F0F1A;--bg3:#141422;--bg4:#1C1C2E;
+  --cream:#E8D5B7;--cream2:#C4AD8A;--cream3:#8A7355;
+  --blood:#8B2635;--blood2:#6B1E29;--blood3:#A83040;
+  --gold:#B8960A;--gold2:#D4AA0E;
+  --border:rgba(232,213,183,0.12);--border2:rgba(232,213,183,0.25);
+  --text:rgba(232,213,183,0.9);--text2:rgba(232,213,183,0.6);--text3:rgba(232,213,183,0.35);
+}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans SC',sans-serif;min-height:100vh;overflow-x:hidden}
+.screen{display:none;min-height:100vh;padding:2rem 1.5rem;animation:fadeIn .4s ease}
+.screen.active{display:flex;flex-direction:column;align-items:center;justify-content:center}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.title-wrap{text-align:center;max-width:480px;width:100%}
+.title-candle{font-size:48px;margin-bottom:1.5rem;animation:flicker 3s ease-in-out infinite}
+@keyframes flicker{
+  0%,100%{filter:drop-shadow(0 0 12px #B8960A88) drop-shadow(0 0 30px #B8960A44)}
+  25%{filter:drop-shadow(0 0 8px #B8960A66) drop-shadow(0 0 20px #B8960A33)}
+  75%{filter:drop-shadow(0 0 16px #B8960AAA) drop-shadow(0 0 40px #B8960A55)}
+}
+h1.game-title{font-family:'Noto Serif SC',serif;font-size:3rem;font-weight:700;color:var(--cream);letter-spacing:.15em;margin-bottom:.5rem}
+.game-subtitle{font-size:.85rem;color:var(--text3);letter-spacing:.3em;margin-bottom:3rem}
+.mode-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem;width:100%;margin-bottom:2rem}
+.mode-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:1.5rem 1rem;cursor:pointer;transition:all .25s;text-align:center;position:relative;overflow:hidden}
+.mode-card::before{content:'';position:absolute;inset:0;background:var(--blood);opacity:0;transition:.25s}
+.mode-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.mode-card:hover::before{opacity:.06}
+.mode-card-icon{font-size:1.8rem;margin-bottom:.75rem}
+.mode-card-name{font-family:'Noto Serif SC',serif;font-size:1rem;color:var(--cream);margin-bottom:.4rem}
+.mode-card-desc{font-size:.75rem;color:var(--text3);line-height:1.6}
+
+.panel{max-width:540px;width:100%}
+.panel-title{font-family:'Noto Serif SC',serif;font-size:1.4rem;color:var(--cream);margin-bottom:.4rem;text-align:center}
+.panel-sub{font-size:.8rem;color:var(--text3);text-align:center;margin-bottom:1.25rem;letter-spacing:.1em}
+.filter-row{display:flex;gap:.5rem;margin-bottom:1.25rem;flex-wrap:wrap}
+.filter-btn{padding:.35rem .9rem;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .2s;font-family:'Noto Sans SC',sans-serif}
+.filter-btn:hover{border-color:var(--border2);color:var(--cream)}
+.filter-btn.active{background:var(--blood2);border-color:var(--blood3);color:var(--cream)}
+.puzzle-list{display:flex;flex-direction:column;gap:.65rem;margin-bottom:1.25rem;max-height:360px;overflow-y:auto;padding-right:.25rem}
+.puzzle-list::-webkit-scrollbar{width:3px}
+.puzzle-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.puzzle-item{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:.9rem 1.1rem;cursor:pointer;transition:all .2s;display:flex;align-items:flex-start;gap:.85rem}
+.puzzle-item:hover{border-color:var(--border2);background:var(--bg4)}
+.puzzle-item.selected{border-color:var(--blood3);background:rgba(139,38,53,.15)}
+.puzzle-diff{font-size:.62rem;padding:.2rem .5rem;border-radius:4px;white-space:nowrap;font-family:'Noto Serif SC',serif;flex-shrink:0;margin-top:2px}
+.diff-easy{background:rgba(42,74,107,.4);color:#6AACDF;border:1px solid rgba(106,172,223,.3)}
+.diff-med{background:rgba(184,150,10,.15);color:#D4AA0E;border:1px solid rgba(184,150,10,.3)}
+.diff-hard{background:rgba(139,38,53,.3);color:#E07080;border:1px solid rgba(139,38,53,.4)}
+.puzzle-preview-title{font-size:.88rem;color:var(--cream);margin-bottom:.25rem;font-family:'Noto Serif SC',serif}
+.puzzle-preview-text{font-size:.76rem;color:var(--text2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.category-tag{font-size:.62rem;color:var(--text3);margin-top:.3rem}
+.divider{display:flex;align-items:center;gap:1rem;margin:1rem 0;color:var(--text3);font-size:.75rem;letter-spacing:.1em}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.btn-row{display:flex;gap:.75rem;margin-top:1.25rem}
+.btn-back{padding:.7rem 1.4rem;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.85rem;cursor:pointer;font-family:'Noto Sans SC',sans-serif;transition:all .2s}
+.btn-back:hover{border-color:var(--border2);color:var(--cream)}
+.btn-start{flex:1;padding:.75rem;background:var(--blood);border:none;border-radius:8px;color:var(--cream);font-size:.9rem;cursor:pointer;font-family:'Noto Serif SC',serif;font-weight:600;letter-spacing:.1em;transition:all .2s}
+.btn-start:hover{background:var(--blood3)}
+.btn-start:disabled{opacity:.4;cursor:not-allowed}
+
+/* JOIN SCREEN */
+.join-panel{max-width:400px;width:100%;text-align:center}
+.join-or{display:flex;align-items:center;gap:1rem;margin:1.5rem 0;color:var(--text3);font-size:.8rem}
+.join-or::before,.join-or::after{content:'';flex:1;height:1px;background:var(--border)}
+.code-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;color:var(--cream);font-family:'Noto Serif SC',serif;font-size:1.8rem;text-align:center;letter-spacing:.4em;padding:.75rem;outline:none;text-transform:uppercase}
+.code-input:focus{border-color:var(--blood3)}
+.code-input::placeholder{color:var(--text3);letter-spacing:.2em;font-size:1rem}
+
+/* ROOM */
+.room-panel{max-width:420px;width:100%;text-align:center}
+.room-code-display{font-family:'Noto Serif SC',serif;font-size:2.8rem;letter-spacing:.4em;color:var(--cream);margin:1.2rem 0;text-indent:.4em;cursor:pointer;transition:color .2s}
+.room-code-display:hover{color:var(--cream2)}
+.room-players{display:flex;flex-direction:column;gap:.5rem;margin:1rem 0 1.5rem;text-align:left;max-height:200px;overflow-y:auto}
+.room-player{display:flex;align-items:center;gap:.75rem;padding:.65rem 1rem;background:var(--bg3);border:1px solid var(--border);border-radius:8px}
+.player-dot{width:8px;height:8px;border-radius:50%;background:var(--gold2);flex-shrink:0;animation:pulse 2s ease infinite}
+.player-dot.host{background:var(--blood3)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.player-name{font-size:.88rem;color:var(--cream)}
+.player-badge{margin-left:auto;font-size:.62rem;color:var(--text3)}
+.waiting-hint{font-size:.75rem;color:var(--text3);margin-bottom:1.5rem;line-height:1.6}
+
+/* GAME */
+#game-screen{padding:0;justify-content:stretch;align-items:stretch}
+.game-layout{display:flex;flex-direction:column;height:100vh;max-width:720px;width:100%;margin:0 auto}
+.game-header{padding:.9rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:1rem;flex-shrink:0;background:rgba(8,8,14,.95);backdrop-filter:blur(8px)}
+.game-header-back{background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.1rem;padding:.25rem;line-height:1;transition:color .2s}
+.game-header-back:hover{color:var(--cream)}
+.game-header-info{flex:1}
+.game-mode-badge{font-size:.62rem;color:var(--text3);letter-spacing:.15em;text-transform:uppercase;margin-bottom:.15rem}
+.game-header-title{font-family:'Noto Serif SC',serif;font-size:.95rem;color:var(--cream)}
+.online-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#5DCEA0;margin-right:4px;vertical-align:middle}
+.puzzle-card{margin:1.25rem 1.5rem;flex-shrink:0;background:var(--bg3);border:1px solid var(--border2);border-radius:14px;padding:1.1rem 1.4rem;position:relative;overflow:hidden}
+.puzzle-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--blood),transparent);opacity:.6}
+.puzzle-card-label{font-size:.68rem;color:var(--blood3);letter-spacing:.2em;margin-bottom:.5rem;font-family:'Noto Serif SC',serif}
+.puzzle-card-text{font-family:'Noto Serif SC',serif;font-size:.97rem;color:var(--cream);line-height:1.85}
+.puzzle-card-diff{position:absolute;top:.9rem;right:.9rem;font-size:.62rem;padding:.2rem .5rem;border-radius:4px}
+.chat-area{flex:1;overflow-y:auto;padding:1rem 1.5rem;display:flex;flex-direction:column;gap:.7rem}
+.chat-area::-webkit-scrollbar{width:4px}
+.chat-area::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.msg{display:flex;flex-direction:column;gap:.3rem;max-width:85%}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.ai{align-self:flex-start;align-items:flex-start}
+.msg.other-user{align-self:flex-start;align-items:flex-start}
+.msg-sender{font-size:.65rem;color:var(--text3);margin-bottom:.15rem}
+.msg-bubble{padding:.6rem 1rem;border-radius:10px;font-size:.87rem;line-height:1.75}
+.msg.user .msg-bubble{background:rgba(139,38,53,.25);border:1px solid rgba(139,38,53,.4);color:var(--cream);border-bottom-right-radius:3px}
+.msg.ai .msg-bubble{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:3px}
+.msg.other-user .msg-bubble{background:rgba(42,74,107,.2);border:1px solid rgba(42,74,107,.4);color:var(--cream);border-bottom-left-radius:3px}
+.msg-verdict{font-size:.68rem;font-weight:600;letter-spacing:.12em;padding:.22rem .7rem;border-radius:20px;font-family:'Noto Serif SC',serif}
+.verdict-yes{background:rgba(10,120,60,.25);color:#5DCEA0;border:1px solid rgba(10,120,60,.4)}
+.verdict-no{background:rgba(139,38,53,.25);color:#E07080;border:1px solid rgba(139,38,53,.3)}
+.verdict-partial{background:rgba(184,150,10,.15);color:#D4AA0E;border:1px solid rgba(184,150,10,.3)}
+.verdict-irr{background:rgba(80,80,80,.2);color:var(--text3);border:1px solid var(--border)}
+.typing-indicator{display:flex;align-items:center;gap:4px;padding:.6rem 1rem;background:var(--bg3);border:1px solid var(--border);border-radius:10px;border-bottom-left-radius:3px}
+.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--blood3);animation:typingDot 1.2s ease infinite}
+.typing-dot:nth-child(2){animation-delay:.2s}
+.typing-dot:nth-child(3){animation-delay:.4s}
+@keyframes typingDot{0%,60%,100%{opacity:.3;transform:scale(.8)}30%{opacity:1;transform:scale(1)}}
+.input-area{padding:.9rem 1.5rem;border-top:1px solid var(--border);flex-shrink:0;background:rgba(8,8,14,.95)}
+.hint-bar{display:flex;align-items:center;gap:.5rem;padding:.4rem 0;margin-bottom:.5rem;font-size:.7rem;color:var(--text3)}
+.hint-key{background:var(--bg4);border:1px solid var(--border);border-radius:4px;padding:.1rem .4rem;font-size:.65rem;color:var(--text2)}
+.input-row{display:flex;gap:.75rem;align-items:flex-end}
+.question-input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--cream);font-size:.87rem;padding:.7rem 1rem;font-family:'Noto Sans SC',sans-serif;resize:none;min-height:42px;max-height:120px;line-height:1.6;transition:border-color .2s;outline:none}
+.question-input::placeholder{color:var(--text3)}
+.question-input:focus{border-color:var(--border2)}
+.send-btn{width:40px;height:40px;background:var(--blood);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;color:var(--cream);font-size:1rem}
+.send-btn:hover{background:var(--blood3)}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* REVEAL */
+.reveal-panel{max-width:520px;width:100%;text-align:center}
+.reveal-icon{font-size:3rem;margin-bottom:.75rem}
+.reveal-title{font-family:'Noto Serif SC',serif;font-size:1.7rem;color:var(--cream);margin-bottom:1.75rem}
+.reveal-content{background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:1.4rem;margin-bottom:1.75rem;text-align:left;position:relative;overflow:hidden}
+.reveal-content::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.6}
+.reveal-label{font-size:.68rem;color:var(--gold);letter-spacing:.2em;margin-bottom:.6rem;font-family:'Noto Serif SC',serif}
+.reveal-text{font-family:'Noto Serif SC',serif;font-size:.95rem;color:var(--cream);line-height:1.9}
+.reveal-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1.75rem}
+.stat-box{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:.9rem;text-align:center}
+.stat-num{font-family:'Noto Serif SC',serif;font-size:1.5rem;color:var(--cream);margin-bottom:.2rem}
+.stat-label{font-size:.68rem;color:var(--text3)}
+.reveal-btns{display:flex;gap:.75rem}
+
+#gen-loading{display:none;text-align:center;padding:2.5rem 0}
+.loading-spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--blood3);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+#gen-loading p{margin-top:.75rem;font-size:.78rem;color:var(--text3)}
+.toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:.7rem 1.4rem;color:var(--cream);font-size:.82rem;transition:transform .3s ease;z-index:999;white-space:nowrap;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+@media(max-width:500px){h1.game-title{font-size:2.2rem}.mode-cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<h2 style="position:absolute;left:-9999px">海龟汤悬疑推理游戏</h2>
+
+<!-- TITLE -->
+<div id="title-screen" class="screen active">
+  <div class="title-wrap">
+    <div class="title-candle">🕯️</div>
+    <h1 class="game-title">海龟汤</h1>
+    <p class="game-subtitle">情境猜谜 · 悬疑推理</p>
+    <div class="mode-cards">
+      <div class="mode-card" onclick="goSolo()">
+        <div class="mode-card-icon">🔍</div>
+        <div class="mode-card-name">单人模式</div>
+        <div class="mode-card-desc">与本地主持人独自探案，完全离线</div>
+      </div>
+      <div class="mode-card" onclick="goMultiMenu()">
+        <div class="mode-card-icon">👥</div>
+        <div class="mode-card-name">多人联机</div>
+        <div class="mode-card-desc">创建房间或输入房间码加入好友</div>
+      </div>
+    </div>
+    <p style="font-size:.72rem;color:var(--text3);line-height:1.8">通过是非题提问，还原事件真相<br>主持人只会回答「是」「否」「无关」</p>
+  </div>
+</div>
+
+<!-- MULTI MENU -->
+<div id="multi-menu-screen" class="screen">
+  <div class="join-panel">
+    <p class="panel-title">多人联机</p>
+    <p class="panel-sub" style="margin-bottom:2rem">你想创建还是加入？</p>
+    <button class="btn-start" style="width:100%;margin-bottom:1rem;flex:none" onclick="createRoom()">✦ 创建新房间</button>
+    <div class="join-or">或者加入好友的房间</div>
+    <input class="code-input" id="join-code-input" placeholder="输入房间码" maxlength="6"
+      oninput="this.value=this.value.toUpperCase()">
+    <div class="btn-row">
+      <button class="btn-back" onclick="goTitle()">返回</button>
+      <button class="btn-start" onclick="joinRoom()">加入房间 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ROOM LOBBY -->
+<div id="room-screen" class="screen">
+  <div class="room-panel">
+    <p class="panel-title" id="room-title">我的房间</p>
+    <p style="font-size:.75rem;color:var(--text3);margin-bottom:.3rem">房间码（点击复制）</p>
+    <div class="room-code-display" id="room-code-display" onclick="copyRoomCode()">——</div>
+    <div class="room-players" id="room-players"></div>
+    <p class="waiting-hint" id="room-hint">等待好友加入，然后开始选题</p>
+    <div class="btn-row" style="justify-content:center">
+      <button class="btn-back" onclick="leaveRoom()">离开</button>
+      <button class="btn-start" style="flex:none;padding:.75rem 2rem" id="room-start-btn" onclick="roomGoSelect()">选题开始 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- PUZZLE SELECT -->
+<div id="select-screen" class="screen">
+  <div class="panel">
+    <p class="panel-title">选择汤面</p>
+    <p class="panel-sub">共 <span id="puzzle-count">25</span> 道谜题</p>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="filterPuzzles('all',this)">全部</button>
+      <button class="filter-btn" onclick="filterPuzzles('easy',this)">入门</button>
+      <button class="filter-btn" onclick="filterPuzzles('med',this)">中等</button>
+      <button class="filter-btn" onclick="filterPuzzles('hard',this)">烧脑</button>
+      <button class="filter-btn" onclick="filterPuzzles('daily',this)">日常</button>
+      <button class="filter-btn" onclick="filterPuzzles('mystery',this)">悬疑</button>
+      <button class="filter-btn" onclick="filterPuzzles('warm',this)">温情</button>
+    </div>
+    <div id="gen-loading"><div class="loading-spinner"></div><p>正在随机抽取…</p></div>
+    <div class="puzzle-list" id="puzzle-list"></div>
+    <div class="divider">或</div>
+    <button class="btn-back" style="width:100%;text-align:center;padding:.9rem" onclick="randomPuzzle()">🎲 随机抽一道</button>
+    <div class="btn-row">
+      <button class="btn-back" onclick="selectBack()">返回</button>
+      <button class="btn-start" id="start-btn" disabled onclick="startGame()">开始推理 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game-screen" class="screen">
+  <div class="game-layout">
+    <div class="game-header">
+      <button class="game-header-back" onclick="exitGame()">←</button>
+      <div class="game-header-info">
+        <div class="game-mode-badge" id="game-mode-label">单人模式</div>
+        <div class="game-header-title" id="game-header-title">海龟汤</div>
+      </div>
+      <button class="btn-back" style="padding:.4rem .85rem;font-size:.72rem" onclick="showSolution()">揭晓答案</button>
+    </div>
+    <div class="puzzle-card">
+      <div class="puzzle-card-label">汤 面</div>
+      <div class="puzzle-card-text" id="game-puzzle-text"></div>
+      <div class="puzzle-card-diff" id="game-diff-badge"></div>
+    </div>
+    <div class="chat-area" id="chat-area"></div>
+    <div class="input-area">
+      <div class="hint-bar">
+        <span class="hint-key">Enter</span> 发送 &nbsp;
+        <span class="hint-key">Shift+Enter</span> 换行
+        <span style="margin-left:auto" id="online-count-bar"></span>
+      </div>
+      <div class="input-row">
+        <textarea class="question-input" id="q-input" placeholder="提问一个是非题，例如：这件事发生在室内吗？" rows="1"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendQuestion()">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- REVEAL -->
+<div id="reveal-screen" class="screen">
+  <div class="reveal-panel">
+    <div class="reveal-icon">🔮</div>
+    <div class="reveal-title">谜底揭晓</div>
+    <div class="reveal-content">
+      <div class="reveal-label">汤 底</div>
+      <div class="reveal-text" id="reveal-text"></div>
+    </div>
+    <div class="reveal-stats">
+      <div class="stat-box"><div class="stat-num" id="stat-q">0</div><div class="stat-label">提问次数</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-yes">0</div><div class="stat-label">命中次数</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-time">0分</div><div class="stat-label">用时</div></div>
+    </div>
+    <div class="reveal-btns">
+      <button class="btn-back" style="flex:1" onclick="goTitle()">回到首页</button>
+      <button class="btn-start" style="flex:1" onclick="playAgain()">再来一局</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ABLY_KEY = 'M9SpRA.jsy3hg:r-r2jHToR7MMNeCO3yPZzxIaEHjM9sUK1d73VzckjBw';
+
+const PUZZLES = [
+  {id:1,diff:'hard',diffLabel:'烧脑',category:'mystery',title:'海龟汤',
+   face:'一个男人走进餐厅，点了一份海龟汤。喝了一口后，他回家开枪自杀了。',
+   solution:'男人曾与妻子在海难中漂流。食物耗尽时，同行的船员给他喝了一碗"海龟汤"，他的妻子却在那次海难中死去了。多年后，他在餐厅喝到了真正的海龟汤，发现味道与记忆中截然不同。他这才意识到，当年那碗汤其实是妻子的肉——同行者杀了她，以此救活了自己。'},
+  {id:2,diff:'easy',diffLabel:'入门',category:'daily',title:'电梯里的矮人',
+   face:'一个住在20楼的男人，每天早上乘电梯到1楼，晚上却只坐到12楼，再走楼梯上去。下雨天他会直接坐到20楼。为什么？',
+   solution:'这个男人身材很矮，手够不到20楼以上的电梯按钮。早上下楼，1楼按钮位置很低没有问题。晚上回家时，他能按到的最高楼层是12楼，只好走楼梯。下雨天，他可以用雨伞伸长去戳到20楼的按钮。'},
+  {id:3,diff:'easy',diffLabel:'入门',category:'daily',title:'草地上的遗物',
+   face:'草地上有一堆煤、一根胡萝卜和两个纽扣，旁边什么人都没有。',
+   solution:'这是一个融化的雪人留下的遗迹。原本的眼睛是两个纽扣，鼻子是胡萝卜，身体用煤块堆成。气温升高后雪融化了，只剩下这些东西留在草地上。'},
+  {id:4,diff:'hard',diffLabel:'烧脑',category:'mystery',title:'婚礼上的哭泣',
+   face:'一个女人在婚礼上嚎啕大哭，宾客们却全都面露微笑。这场婚礼的新郎正是她深爱的人，但她不是新娘。',
+   solution:'这个女人是一位双目失明的母亲。她儿子今天结婚，她哭是因为无法看见儿子的脸，无法亲眼见证这个时刻。宾客们微笑是因为他们看到了这对新人幸福的模样，并不知道这位母亲是盲人。'},
+  {id:5,diff:'med',diffLabel:'中等',category:'mystery',title:'死在浴室',
+   face:'一个男人死在了浴室里，旁边只有一张纸。警察看了看那张纸，判定为自杀。',
+   solution:'那张纸上是一道数独题，而且已经填完——但答案是错的。男人是一个对数独有严重强迫症的人，无论如何都无法接受自己填出了错误答案，最终选择了结束生命。'},
+  {id:6,diff:'easy',diffLabel:'入门',category:'daily',title:'快乐的囚犯',
+   face:'一个男人在监狱里待了二十年，出狱那天他哭着不肯走。',
+   solution:'男人在入狱之前是个流浪汉，无家可归，身无分文。监狱里至少有饭吃、有床睡、有人陪伴。二十年后出狱，他面对的依然是一无所有的世界，所以不愿离开。'},
+  {id:7,diff:'easy',diffLabel:'入门',category:'daily',title:'永远的第二名',
+   face:'一个赛跑运动员在比赛中超过了第二名，他的名次是多少？',
+   solution:'他超过了第二名，所以他自己就变成了第二名。'},
+  {id:8,diff:'med',diffLabel:'中等',category:'daily',title:'不喝水的人',
+   face:'一个男人在沙漠里独自行走了三天三夜，没有喝任何水，却活了下来。为什么？',
+   solution:'这三天三夜里，他一直在夜间行走，白天躲在阴凉处睡觉，靠着夜间稍低的气温大幅减少了水分流失。他还随身带了少量富含水分的食物，比如仙人掌果和干燥的椰枣。虽然极度虚弱，但终于撑到了找到水源的那一刻。'},
+  {id:9,diff:'easy',diffLabel:'入门',category:'warm',title:'老人与照片',
+   face:'一位老人每天都会亲吻一张相片，然后把它放进抽屉里。但他从未见过相片里的人。',
+   solution:'相片里是他早夭的孩子——孩子在出生后不久便去世了，而他当时在外地，赶回来时只看到了孩子的遗照。他们从未真正见过面，但那是他的骨肉，所以他每天亲吻那张相片，作为一种无法言说的思念。'},
+  {id:10,diff:'med',diffLabel:'中等',category:'daily',title:'消失的零钱',
+   face:'一个女人去超市买了一瓶水，付了100元，找回了97元。但她既没有收下那3元，也没有把它们留在收银台，钱就这么消失了。',
+   solution:'收银员把3元找零投进了旁边的"爱心捐款箱"里，女人看到后点了点头表示同意。钱并没有消失，只是以捐款的形式流转了出去。'},
+  {id:11,diff:'hard',diffLabel:'烧脑',category:'mystery',title:'完美的不在场',
+   face:'一个侦探独自在家，门窗都锁着，结果还是被人杀死了。',
+   solution:'凶手通过烟囱下毒——在壁炉里点燃了混有剧毒物质的特殊木材。侦探在密闭的房间里吸入了毒烟，在不知情的情况下中毒身亡。现场没有任何入侵痕迹，因为凶手从未真正进入房间。'},
+  {id:12,diff:'med',diffLabel:'中等',category:'mystery',title:'停电的那晚',
+   face:'停电了。一个女人在黑暗中打开了她的手机，却看到了让她决定报警的消息。',
+   solution:'停电前，她的丈夫说要去外面修保险丝。手机亮起时，她看到了丈夫发来的一条消息："我在公司，今晚加班，你先睡。"——但他刚才还在家里。她意识到楼道里还有另一个人。'},
+  {id:13,diff:'hard',diffLabel:'烧脑',category:'mystery',title:'两张遗书',
+   face:'警察在一个男人的桌上发现了两封遗书，内容完全相同。他们判定为他杀。',
+   solution:'两封遗书字迹完全一致、内容一模一样，说明这不是同一个人在不同心情下写的，而是被人复印伪造了。真正的遗书只有一封，第二封是凶手为了让死亡看起来像自杀而伪造的——但凶手不知道，当人在情绪崩溃中写遗书时，两封内容绝不可能连标点都一字不差。'},
+  {id:14,diff:'med',diffLabel:'中等',category:'mystery',title:'沉默的证人',
+   face:'一个男人被指控谋杀，但他的律师只用了一句话就让他无罪释放。',
+   solution:'律师对证人说："你说你在现场亲眼目睹了凶手的脸。但那天晚上停电，案发时间在半夜，而且月亮被云遮住了。你是怎么看清楚的？"证人无法自圆其说，整个案件立刻崩塌。'},
+  {id:15,diff:'hard',diffLabel:'烧脑',category:'mystery',title:'最后一块饼干',
+   face:'一个女人死在了厨房里，手里握着一块饼干。法医判断她不是死于中毒，也没有外伤。',
+   solution:'女人患有严重的坚果过敏，她不知道这种品牌的饼干里含有微量花生油。她死于严重的过敏反应（过敏性休克），而非中毒或外伤。法医后来在饼干包装袋背面找到了极小字体印刷的配料表。'},
+  {id:16,diff:'easy',diffLabel:'入门',category:'warm',title:'总是迟到的人',
+   face:'一个男人每天上班都迟到，但他从来没有被解雇。',
+   solution:'这个男人每天迟到，是因为他每天早上要把年迈的母亲从床上扶起来、帮她洗漱、喂她吃早饭，再去上班。他的老板知道这件事，从来不追究。'},
+  {id:17,diff:'med',diffLabel:'中等',category:'warm',title:'永远不会变老的信',
+   face:'一个女孩每年都会收到一封来自已故祖父的生日信。祖父在她三岁那年去世了。',
+   solution:'祖父去世前，提前写好了几十封信，每封信封上都写好了"第X年生日"，委托律师每年在她生日前寄出一封。女孩长大后才知道真相，却一直把这些信视为最珍贵的礼物。'},
+  {id:18,diff:'easy',diffLabel:'入门',category:'warm',title:'不会游泳的救生员',
+   face:'一个不会游泳的人在海滩上救了三个溺水的孩子。',
+   solution:'他用绳子把自己绑在岸边的柱子上，然后把绳子的另一头甩给溺水的孩子，一个一个地拉了回来。他自始至终没有下水。'},
+  {id:19,diff:'med',diffLabel:'中等',category:'warm',title:'陌生人的礼物',
+   face:'一个男人收到了一份陌生人寄来的礼物，里面是一双旧鞋。他看到之后哭了很久，然后郑重地把鞋收了起来。',
+   solution:'多年前，男人在最潦倒的时候，一个素不相识的流浪汉把自己脚上唯一的鞋脱下来送给了他，让他走过了那段最难熬的冬天。他们此后再未相见。这双鞋是那个流浪汉去世前托人寄来的遗物，附了一张纸条："希望你过得比我好。"'},
+  {id:20,diff:'med',diffLabel:'中等',category:'mystery',title:'将军的决定',
+   face:'一位将军在战场上下令让士兵放下武器，全军撤退。第二天他获得了嘉奖。',
+   solution:'他撤退是为了引诱敌军深入己方设好的包围圈。放下武器是为了伪装成溃败，让敌人放松戒备追击。第二天，被包围的敌军全线崩溃。他的撤退是整个作战计划的关键一步。'},
+  {id:21,diff:'hard',diffLabel:'烧脑',category:'mystery',title:'消失的村庄',
+   face:'地图上明明标着一个村庄，但探险队到达后，发现那里空无一人，却没有任何搬迁或战争的痕迹。',
+   solution:'那个村庄的居民全都是聋哑人，他们世世代代用手语交流，几乎不与外界往来。当探险队到达时，居民们早已通过手语商量好，集体躲进了山里的地洞，等陌生人离开。他们对外来者极为警惕，不想被"发现"。'},
+  {id:22,diff:'med',diffLabel:'中等',category:'daily',title:'一本空白的日记',
+   face:'一个著名作家去世后，人们在他书桌上发现了一本厚厚的日记，里面的页全是空白的。',
+   solution:'作家患有严重的手部震颤症，晚年已经无法书写。他每天坐在书桌前，打开日记，在脑海中把当天的故事"写"进去，然后合上本子。日记对他来说是一种仪式——即使无法动笔，他也要"记录"每一天。'},
+  {id:23,diff:'hard',diffLabel:'烧脑',category:'mystery',title:'双胞胎的秘密',
+   face:'一对双胞胎兄弟，哥哥总说真话，弟弟总说谎话。有一天，他们俩都说："我是弟弟。"',
+   solution:'这道题本身是个悖论。如果说真话的哥哥说"我是弟弟"，这是谎言，违背了他只说真话的设定；如果说谎话的弟弟说"我是弟弟"，这是真话，同样违背设定。唯一的解释是规则在某种特殊情况下失效了，或者他们其中一人已经不再遵守那个规则。'},
+  {id:24,diff:'easy',diffLabel:'入门',category:'daily',title:'永远不会满的杯子',
+   face:'一个男人把一杯水倒得满满的，然后放在桌上，一滴都没有洒出去，但杯子慢慢变空了。',
+   solution:'杯子有一个细小的裂缝，水慢慢地从裂缝渗出来，流到了桌布里被吸收了，所以杯子空了但桌面看起来是干的。'},
+  {id:25,diff:'med',diffLabel:'中等',category:'warm',title:'不需要语言的对话',
+   face:'两个人坐在咖啡馆里，整整一个小时没有说一句话，离开时都感到非常满足。',
+   solution:'这两个人都是聋哑人，他们一整个小时都在用手语聊天，聊得投入而愉快。旁边的人只看到他们没有开口，却不知道他们其实说了很多。'}
+];
+
+// ── 本地主持人（规则引擎，不需要 API）──
+const HOST_RULES = [
+  {keys:['死','去世','死亡','杀','命','亡'],yes:'是的，死亡与此事件有关。',no:'否，死亡并非此事件的核心。'},
+  {keys:['故意','蓄意','计划','预谋'],yes:'是，这是经过考虑的行为。',no:'否，并非出于主观意图。'},
+  {keys:['意外','巧合','偶然'],yes:'是，存在意外的成分。',no:'否，这并非偶然。'},
+  {keys:['男','他','先生'],yes:'是。',no:'否。'},
+  {keys:['女','她','女士','太太'],yes:'是。',no:'否。'},
+  {keys:['室内','屋内','家','房间','楼'],yes:'是，场景在室内。',no:'否，不在室内。'},
+  {keys:['室外','户外','街','野外','路'],yes:'是，场景在室外。',no:'否，不在室外。'},
+  {keys:['钱','金钱','财富','贫'],yes:'与金钱有一定关联。',no:'否，金钱不是关键。'},
+  {keys:['食物','吃','饭','喝','饮'],yes:'是，饮食与此有关。',no:'否，食物不是关键。'},
+  {keys:['工作','职业','上班','职场'],yes:'工作背景有所关联。',no:'否，职业不是核心。'},
+  {keys:['家人','家庭','父母','孩子','子女','妻','丈夫','夫妻'],yes:'是，家庭关系与此有关。',no:'否，家庭不是关键。'},
+  {keys:['朋友','同事','陌生人'],yes:'是，人际关系有一定作用。',no:'否，人际关系不是核心。'},
+  {keys:['秘密','隐瞒','谎言','欺骗'],yes:'是，隐瞒与欺骗有所关联。',no:'否，并无明显欺骗成分。'},
+  {keys:['时间','日期','年','月','天'],yes:'时间因素有一定作用。',no:'否，时间不是关键。'},
+  {keys:['地点','位置','哪里','场所'],yes:'地点有一定关联。',no:'否，地点不是关键。'},
+];
+
+function localHostAnswer(question, puzzle) {
+  const q = question;
+  const sol = puzzle.solution;
+  const face = puzzle.face;
+  
+  // 猜对检测
+  const keyPhrases = sol.split('。').filter(s=>s.length>8).map(s=>s.slice(0,10));
+  for(const phrase of keyPhrases){
+    if(q.includes(phrase.slice(0,6))) return {text:'🎉 恭喜你！你已经触及了真相的核心。游戏结束，可以查看完整答案了。',verdict:'yes'};
+  }
+  
+  // 规则匹配
+  for(const rule of HOST_RULES){
+    const matched = rule.keys.some(k=>q.includes(k));
+    if(matched){
+      // 检测答案里是否出现这些关键词
+      const inSol = rule.keys.some(k=>sol.includes(k)||face.includes(k));
+      return inSol
+        ? {text:rule.yes, verdict:'yes'}
+        : {text:rule.no, verdict:'no'};
+    }
+  }
+  
+  // 是否问句
+  if(q.includes('吗') || q.includes('？') || q.includes('?')){
+    // 随机给部分相关或无关
+    const r = Math.random();
+    if(r < 0.2) return {text:'部分相关。',verdict:'partial'};
+    return {text:'无关。',verdict:'irr'};
+  }
+  
+  return {text:'无关。',verdict:'irr'};
+}
+
+// ── 状态 ──
+let state = {
+  mode:'solo', selectedPuzzle:null, currentFilter:'all',
+  questionCount:0, yesCount:0, startTime:null, isTyping:false,
+  roomCode:null, isHost:false, myName:null,
+  ablyClient:null, channel:null, members:[]
+};
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goTitle(){
+  disconnectAbly();
+  showScreen('title-screen');
+}
+function goSolo(){state.mode='solo';loadPuzzleSelect()}
+function goMultiMenu(){showScreen('multi-menu-screen')}
+function selectBack(){
+  if(state.mode==='multi') showScreen('room-screen');
+  else goTitle();
+}
+function playAgain(){
+  if(state.mode==='multi') showScreen('room-screen');
+  else goSolo();
+}
+
+// ── 题库 ──
+function loadPuzzleSelect(){
+  state.selectedPuzzle=null;
+  document.getElementById('start-btn').disabled=true;
+  renderPuzzleList(PUZZLES);
+  showScreen('select-screen');
+}
+function filterPuzzles(type,btn){
+  state.currentFilter=type;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  state.selectedPuzzle=null;
+  document.getElementById('start-btn').disabled=true;
+  const filtered=type==='all'?PUZZLES:
+    (['easy','med','hard'].includes(type))?PUZZLES.filter(p=>p.diff===type):PUZZLES.filter(p=>p.category===type);
+  renderPuzzleList(filtered);
+  document.getElementById('puzzle-count').textContent=filtered.length;
+}
+function renderPuzzleList(puzzles){
+  const list=document.getElementById('puzzle-list');
+  list.innerHTML='';
+  if(!puzzles.length){list.innerHTML='<p style="text-align:center;color:var(--text3);font-size:.82rem;padding:2rem 0">暂无符合条件的谜题</p>';return}
+  const catMap={daily:'日常',mystery:'悬疑',warm:'温情'};
+  puzzles.forEach(p=>{
+    const item=document.createElement('div');
+    item.className='puzzle-item';
+    item.onclick=()=>selectPuzzle(p,item);
+    const dc=p.diff==='easy'?'diff-easy':p.diff==='med'?'diff-med':'diff-hard';
+    item.innerHTML=`<div style="flex-shrink:0;margin-top:2px"><span class="puzzle-diff ${dc}">${p.diffLabel}</span></div>
+    <div><div class="puzzle-preview-title">${p.title}</div>
+    <div class="puzzle-preview-text">${p.face}</div>
+    <div class="category-tag"># ${catMap[p.category]||p.category}</div></div>`;
+    list.appendChild(item);
+  });
+}
+function selectPuzzle(puzzle,el){
+  document.querySelectorAll('.puzzle-item').forEach(i=>i.classList.remove('selected'));
+  el.classList.add('selected');
+  state.selectedPuzzle=puzzle;
+  document.getElementById('start-btn').disabled=false;
+}
+function randomPuzzle(){
+  const arr=[...PUZZLES];
+  const p=arr[Math.floor(Math.random()*arr.length)];
+  state.selectedPuzzle=p;
+  renderPuzzleList(PUZZLES);
+  const items=document.querySelectorAll('.puzzle-item');
+  const idx=PUZZLES.indexOf(p);
+  if(items[idx]){items[idx].classList.add('selected');items[idx].scrollIntoView({block:'nearest'})}
+  document.getElementById('start-btn').disabled=false;
+  showToast('🎲 已随机选中：'+p.title);
+}
+
+// ── Ably 联机 ──
+function genName(){
+  const adj=['神秘','沉默','幽暗','冷静','睿智'];
+  const n=['侦探','推理师','观察者','猎手','谋士'];
+  return adj[Math.floor(Math.random()*adj.length)]+n[Math.floor(Math.random()*n.length)];
+}
+function genCode(){return Math.random().toString(36).substr(2,6).toUpperCase()}
+
+async function connectAbly(roomCode){
+  if(state.ablyClient) state.ablyClient.close();
+  state.myName = state.myName || genName();
+  const client = new Ably.Realtime({key:ABLY_KEY, clientId:state.myName});
+  state.ablyClient = client;
+  await new Promise(r=>client.connection.once('connected',r));
+  const ch = client.channels.get('haiguitang-'+roomCode);
+  state.channel = ch;
+  await ch.attach();
+  return ch;
+}
+
+async function createRoom(){
+  const code = genCode();
+  state.roomCode = code;
+  state.isHost = true;
+  state.mode = 'multi';
+  state.myName = genName();
+  showToast('正在创建房间…');
+  try{
+    await connectAbly(code);
+    setupChannelListeners();
+    await state.channel.presence.enter({name:state.myName, isHost:true});
+    showRoomScreen();
+  }catch(e){showToast('连接失败，请检查网络')}
+}
+
+async function joinRoom(){
+  const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+  if(code.length<4){showToast('请输入有效的房间码');return}
+  state.roomCode = code;
+  state.isHost = false;
+  state.mode = 'multi';
+  state.myName = genName();
+  showToast('正在加入房间…');
+  try{
+    await connectAbly(code);
+    setupChannelListeners();
+    await state.channel.presence.enter({name:state.myName, isHost:false});
+    // 请求同步当前游戏状态
+    state.channel.publish('sync-request',{from:state.myName});
+    showRoomScreen();
+  }catch(e){showToast('加入失败，请检查房间码')}
+}
+
+function setupChannelListeners(){
+  const ch = state.channel;
+
+  // 监听成员变化
+  ch.presence.subscribe(update=>{
+    refreshMembers();
+  });
+
+  // 监听消息
+  ch.subscribe('question',(msg)=>{
+    const {sender,text} = msg.data;
+    if(sender===state.myName) return; // 自己发的已显示
+    addMsg('other-user', text, null, sender);
+    // 只有房主回答
+    if(state.isHost && state.selectedPuzzle){
+      setTimeout(()=>hostAnswer(text),600);
+    }
+  });
+
+  ch.subscribe('answer',(msg)=>{
+    const {text,verdict} = msg.data;
+    hideTyping();
+    addMsg('ai',text,verdict);
+    if(state.questionCount!==undefined) state.questionCount++;
+    if(verdict==='yes' && state.yesCount!==undefined) state.yesCount++;
+  });
+
+  ch.subscribe('start-game',(msg)=>{
+    const {puzzle} = msg.data;
+    state.selectedPuzzle = puzzle;
+    renderGameScreen(puzzle);
+    showScreen('game-screen');
+    addMsg('ai','🕯️ 谜题已揭晓。大家可以用是非题向主持人提问，主持人只会回答「是」「否」「部分相关」或「无关」。',null);
+  });
+
+  ch.subscribe('reveal',(msg)=>{
+    state.selectedPuzzle = state.selectedPuzzle || msg.data.puzzle;
+    showSolution();
+  });
+
+  ch.subscribe('sync-response',(msg)=>{
+    if(msg.data.puzzle && msg.data.inGame){
+      state.selectedPuzzle = msg.data.puzzle;
+      renderGameScreen(msg.data.puzzle);
+      showScreen('game-screen');
+      // 恢复聊天记录
+      if(msg.data.history){
+        msg.data.history.forEach(h=>addMsg(h.role,h.text,h.verdict,h.sender));
+      }
+    }
+  });
+
+  ch.subscribe('sync-request',(msg)=>{
+    if(state.isHost && state.selectedPuzzle){
+      ch.publish('sync-response',{
+        puzzle:state.selectedPuzzle,
+        inGame:true,
+        history:[]
+      });
+    }
+  });
+}
+
+async function refreshMembers(){
+  const members = await state.channel.presence.get();
+  state.members = members;
+  renderRoomPlayers(members);
+  const bar = document.getElementById('online-count-bar');
+  if(bar) bar.textContent = members.length>1?`<span class="online-dot"></span>${members.length}人在线`:'';
+}
+
+function renderRoomPlayers(members){
+  const el = document.getElementById('room-players');
+  if(!el) return;
+  el.innerHTML='';
+  members.forEach(m=>{
+    const div=document.createElement('div');
+    div.className='room-player';
+    const isMe = m.clientId===state.myName;
+    const isHost = m.data && m.data.isHost;
+    div.innerHTML=`<div class="player-dot ${isHost?'host':''}"></div>
+    <div class="player-name">${m.clientId}${isMe?' (你)':''}</div>
+    <div class="player-badge">${isHost?'主持人':''}</div>`;
+    el.appendChild(div);
+  });
+  const hint = document.getElementById('room-hint');
+  if(hint) hint.textContent = members.length===1?'等待好友加入…':`${members.length}人已在线，可以开始了`;
+}
+
+function showRoomScreen(){
+  document.getElementById('room-code-display').textContent = state.roomCode;
+  document.getElementById('room-title').textContent = state.isHost?'我的房间':'已加入房间';
+  const startBtn = document.getElementById('room-start-btn');
+  startBtn.style.display = state.isHost?'':'none';
+  showScreen('room-screen');
+  refreshMembers();
+}
+
+function roomGoSelect(){
+  if(!state.isHost){showToast('只有主持人可以选题');return}
+  loadPuzzleSelect();
+}
+
+function leaveRoom(){
+  disconnectAbly();
+  goTitle();
+}
+
+function disconnectAbly(){
+  if(state.channel){try{state.channel.presence.leave()}catch(e){}}
+  if(state.ablyClient){try{state.ablyClient.close()}catch(e){}}
+  state.channel=null;state.ablyClient=null;
+}
+
+function copyRoomCode(){
+  const msg=`来玩海龟汤！房间码：${state.roomCode}，打开网站输入房间码加入`;
+  navigator.clipboard.writeText(msg).then(()=>showToast('邀请信息已复制')).catch(()=>showToast('房间码：'+state.roomCode));
+}
+
+// ── 游戏 ──
+function renderGameScreen(puzzle){
+  const dc=puzzle.diff==='easy'?'diff-easy':puzzle.diff==='med'?'diff-med':'diff-hard';
+  document.getElementById('game-puzzle-text').textContent=puzzle.face;
+  document.getElementById('game-header-title').textContent=puzzle.title;
+  document.getElementById('game-mode-label').innerHTML=
+    state.mode==='multi'
+      ?`<span class="online-dot"></span>多人 · ${state.roomCode}`
+      :'单人模式';
+  const badge=document.getElementById('game-diff-badge');
+  badge.textContent=puzzle.diffLabel;badge.className=`puzzle-card-diff ${dc}`;
+  document.getElementById('chat-area').innerHTML='';
+  document.getElementById('q-input').value='';
+}
+
+function startGame(){
+  const puzzle=state.selectedPuzzle;
+  if(!puzzle)return;
+  state.questionCount=0;state.yesCount=0;state.startTime=Date.now();state.isTyping=false;
+  renderGameScreen(puzzle);
+
+  if(state.mode==='multi'){
+    state.channel.publish('start-game',{puzzle});
+  }else{
+    showScreen('game-screen');
+    addMsg('ai','🕯️ 谜题已揭晓。你可以用是非题向主持人提问，主持人只会回答「是」「否」「部分相关」或「无关」。',null);
+  }
+}
+
+async function sendQuestion(){
+  const input=document.getElementById('q-input');
+  const q=input.value.trim();
+  if(!q||state.isTyping)return;
+  input.value='';autoResize(input);
+  state.questionCount++;
+  addMsg('user',q,null);
+  showTyping();state.isTyping=true;
+  document.getElementById('send-btn').disabled=true;
+
+  if(state.mode==='multi'){
+    state.channel.publish('question',{sender:state.myName,text:q});
+    // 只有房主处理答案
+    if(state.isHost && state.selectedPuzzle){
+      setTimeout(()=>hostAnswer(q),600);
+    }
+    // 非房主等待答案（channel listener会处理）
+    if(!state.isHost){
+      state.isTyping=false;
+      document.getElementById('send-btn').disabled=false;
+    }
+  }else{
+    setTimeout(()=>{
+      const result=localHostAnswer(q,state.selectedPuzzle);
+      hideTyping();
+      addMsg('ai',result.text,result.verdict);
+      if(result.verdict==='yes')state.yesCount++;
+      if(result.text.includes('游戏结束'))setTimeout(showSolution,2000);
+      state.isTyping=false;
+      document.getElementById('send-btn').disabled=false;
+    },600+Math.random()*400);
+  }
+}
+
+function hostAnswer(question){
+  const result=localHostAnswer(question,state.selectedPuzzle);
+  state.channel.publish('answer',{text:result.text,verdict:result.verdict});
+  hideTyping();
+  addMsg('ai',result.text,result.verdict);
+  if(result.verdict==='yes')state.yesCount++;
+  if(result.text.includes('游戏结束')){
+    setTimeout(()=>{
+      state.channel.publish('reveal',{puzzle:state.selectedPuzzle});
+      showSolution();
+    },2000);
+  }
+  state.isTyping=false;
+  document.getElementById('send-btn').disabled=false;
+}
+
+function addMsg(role,text,verdict,sender){
+  const chatArea=document.getElementById('chat-area');
+  const msgDiv=document.createElement('div');
+  msgDiv.className=`msg ${role}`;
+  if(sender && role==='other-user'){
+    const s=document.createElement('div');s.className='msg-sender';s.textContent=sender;
+    msgDiv.appendChild(s);
+  }
+  if(verdict){
+    const vmap={yes:['verdict-yes','是'],no:['verdict-no','否'],partial:['verdict-partial','部分相关'],irr:['verdict-irr','无关']};
+    if(vmap[verdict]){
+      const badge=document.createElement('span');
+      badge.className=`msg-verdict ${vmap[verdict][0]}`;badge.textContent=vmap[verdict][1];
+      msgDiv.appendChild(badge);
+    }
+  }
+  const bubble=document.createElement('div');bubble.className='msg-bubble';bubble.textContent=text;
+  msgDiv.appendChild(bubble);
+  chatArea.appendChild(msgDiv);
+  chatArea.scrollTop=chatArea.scrollHeight;
+}
+
+function showTyping(){
+  const chatArea=document.getElementById('chat-area');
+  const t=document.createElement('div');t.className='msg ai';t.id='typing-msg';
+  t.innerHTML='<div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+  chatArea.appendChild(t);chatArea.scrollTop=chatArea.scrollHeight;
+}
+function hideTyping(){const t=document.getElementById('typing-msg');if(t)t.remove()}
+
+function showSolution(){
+  const puzzle=state.selectedPuzzle;if(!puzzle)return;
+  const elapsed=Math.round((Date.now()-state.startTime)/60000);
+  document.getElementById('reveal-text').textContent=puzzle.solution;
+  document.getElementById('stat-q').textContent=state.questionCount;
+  document.getElementById('stat-yes').textContent=state.yesCount;
+  document.getElementById('stat-time').textContent=elapsed+'分';
+  showScreen('reveal-screen');
+}
+
+function exitGame(){if(confirm('确定退出当前游戏？'))playAgain()}
+
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendQuestion()}}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
+function showToast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+</script>
+</body>
+</html>
